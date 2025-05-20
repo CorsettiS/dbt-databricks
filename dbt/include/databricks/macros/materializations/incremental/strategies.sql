@@ -36,20 +36,27 @@
 
 {% endmacro %}
 
-{% macro get_replace_where_sql(args_dict) -%}
-  {%- set predicates = args_dict['incremental_predicates'] -%}
-  {%- set target_relation = args_dict['target_relation'] -%}
-  {%- set temp_relation = args_dict['temp_relation'] -%}
-INSERT INTO {{ target_relation.render() }}
-{% if predicates %}
-  {% if predicates is sequence and predicates is not string %}
-REPLACE WHERE {{ predicates | join(' and ') }}
-  {% else %}
-REPLACE WHERE {{ predicates }}
-  {% endif %}
-{% endif %}
-TABLE {{ temp_relation.render() }}
-{% endmacro %}
+{%- macro get_replace_where_sql(args_dict) -%}
+    {%- set predicates = args_dict["incremental_predicates"] -%}
+    {%- set target_relation = args_dict["target_relation"] -%}
+    {%- set temp_relation = args_dict["temp_relation"] -%}
+
+    {# Get column names from target table to ensure column order consistency #}
+    {%- set target_columns = adapter.get_columns_in_relation(target_relation) -%}
+    {%- set column_names = target_columns | map(attribute="name") | list -%}
+
+    {# Generate the INSERT INTO ... REPLACE WHERE SQL statement #}
+  INSERT INTO {{ target_relation.render() }}
+    {%- if predicates %}
+        {%- if predicates is sequence and predicates is not string %}
+  REPLACE WHERE {{ predicates | join(' AND ') }}
+        {%- else %}
+  REPLACE WHERE {{ predicates }}
+        {%- endif %}
+    {%- endif %}
+SELECT {{ column_names | join(', ') }}
+FROM {{ temp_relation.render() }}
+{%- endmacro -%}
 
 {% macro get_insert_into_sql(source_relation, target_relation) %}
     {%- set source_columns = adapter.get_columns_in_relation(source_relation) | map(attribute="quoted") | list -%}
